@@ -3,7 +3,7 @@
 
 # This file assumes that the frontend has been built using ./scripts/frontend-build
 
-FROM nginxproxymanager/nginx-full:certbot-node
+FROM jc21/nginx-full:certbot-node
 
 ARG TARGETPLATFORM
 ARG BUILD_VERSION
@@ -25,7 +25,7 @@ RUN echo "fs.file-max = 65535" > /etc/sysctl.conf \
 	&& rm -rf /var/lib/apt/lists/*
 
 # s6 overlay
-COPY scripts/install-s6 /tmp/install-s6
+COPY docker/scripts/install-s6 /tmp/install-s6
 RUN /tmp/install-s6 "${TARGETPLATFORM}" && rm -f /tmp/install-s6
 
 EXPOSE 80 81 443
@@ -35,21 +35,17 @@ COPY frontend/dist /app/frontend
 COPY global        /app/global
 
 WORKDIR /app
-RUN yarn install
+RUN yarn install \
+	&& yarn cache clean
 
 # add late to limit cache-busting by modifications
 COPY docker/rootfs /
 
 # Remove frontend service not required for prod, dev nginx config as well
-RUN rm -rf /etc/services.d/frontend /etc/nginx/conf.d/dev.conf
-
-# Change permission of logrotate config file
-RUN chmod 644 /etc/logrotate.d/nginx-proxy-manager
-
-# fix for pip installs
-# https://github.com/NginxProxyManager/nginx-proxy-manager/issues/1769
-RUN pip uninstall --yes setuptools \
-	&& pip install "setuptools==58.0.0"
+RUN rm -rf /etc/services.d/frontend /etc/nginx/conf.d/dev.conf \
+	&& chmod 644 /etc/logrotate.d/nginx-proxy-manager \
+	&& pip uninstall --yes setuptools \
+	&& pip install --no-cache-dir "setuptools==58.0.0"
 
 RUN groupmod -g 1000 users \
 	&& useradd -u 911 -U -d /data -s /bin/false abc \
